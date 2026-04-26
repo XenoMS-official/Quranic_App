@@ -1,0 +1,96 @@
+name: entertainment_module
+description: "A high-end Islamic Media & Video Hub project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # --- STATE MANAGEMENT & UTILS ---
+  provider: ^6.1.2 
+  shared_preferences: ^2.5.5 
+  http: ^1.6.0
+  intl: ^0.20.2 
+  path_provider: ^2.1.5
+  dio: ^5.4.0            
+  flutter_bloc: ^9.1.1 
+  equatable: ^2.0.8
+  flutter_cache_manager: ^3.4.1
+
+  # --- CORE FIREBASE ---
+  firebase_core: ^4.7.0
+  cloud_firestore: ^6.3.0
+  google_sign_in: ^7.2.0
+
+  # --- QURAN AUDIO & PDF ---
+  just_audio: ^0.10.5
+  audioplayers: ^6.6.0
+  syncfusion_flutter_pdfviewer: ^33.1.49
+  audio_video_progress_bar: ^2.0.3
+
+  # --- UI & ANIMATIONS ---
+  flutter_animate: ^4.5.2
+  curved_navigation_bar: ^1.0.6
+  font_awesome_flutter: ^11.0.0
+  google_fonts: ^8.0.2
+  lottie: ^3.3.3
+  shimmer: ^3.0.0
+  cached_network_image: ^3.4.1
+  
+  # --- VIDEO & SHARING ---
+  youtube_player_flutter: ^9.1.3
+  pod_player: ^0.2.2
+  share_plus: ^12.0.2
+  url_launcher: ^6.3.2
+
+  # --- ISLAMIC CALENDAR ---
+  hijri: ^3.0.0
+  timezone: ^0.11.0
+
+  # --- AI & SPEECH ---
+  speech_to_text: ^7.3.0
+  permission_handler: ^12.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # --- ASSETS ---
+  assets:
+    - assets/images/madina.jpg
+    - assets/images/makkah.jpg
+    - assets/images/AbdulBasit.png
+    - assets/images/abdullah-basfar.jpg
+    - assets/images/AbdulSamad.jpg
+    - assets/images/AbuBakarAshShatray.jpg
+    - assets/images/AhmedIbneAliALJamay.jpg
+    - assets/images/Alfasay.jpg
+    - assets/images/AymanSowaid.jpg
+    - assets/images/HaniRifai.jpg
+    - assets/images/Hudhaify.jpg
+    - assets/images/Husary.jpg
+    - assets/images/HusaryMujawad.jpg
+    - assets/images/ibrahimAkhdar.jpg
+    - assets/images/mahirAlMuaiqly.jpg
+    - assets/images/minshwai.jpg
+    - assets/images/minshwaymujjawad.jpg
+    - assets/images/MuhammadAyyoub.jpg
+    - assets/images/MuhammadJibreel.jpg
+    - assets/images/Parhizgar.jpg
+    - assets/images/Saud Bin Ibrahim Al shuraim.jpg
+    - assets/images/Sudais.jpg
+
+# --- OVERRIDES ---
+dependency_overrides:
+  intl: ^0.20.2

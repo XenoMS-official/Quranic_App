@@ -1,0 +1,5 @@
+firebase-admin
+requests
+hijridate
+urllib3
+google-api-python-client
