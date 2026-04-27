@@ -144,7 +144,11 @@ class QuranAudioProvider extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final Dio _dio = Dio(); 
 
+  // Fast Caching Mechanism added here
   final Map<int, Map<String, dynamic>> _surahCache = {};
+  final Map<int, List<dynamic>> _uthmaniCache = {};
+  final Map<int, List<dynamic>> _indoPakCache = {};
+  final Map<int, Map<int, String>> _tafseerCache = {};
 
   List<Ayah> ayahs =[];
   List<Reciter> reciters =[];
@@ -256,6 +260,7 @@ class QuranAudioProvider extends ChangeNotifier {
         List ayahsData = response.data['data']['ayahs'];
         currentTafseer.clear();
         for (var a in ayahsData) currentTafseer[a['numberInSurah']] = a['text'];
+        _tafseerCache[surahNum] = Map.from(currentTafseer); // Save to cache
         notifyListeners();
       }
     } catch(e) {}
@@ -295,22 +300,41 @@ class QuranAudioProvider extends ChangeNotifier {
       ayahs.sort((a, b) => a.numberInSurah.compareTo(b.numberInSurah));
       
       if (jumpToAyahIndex != null) _playingAyahIndex = jumpToAyahIndex;
-      fetchTafseer(surahNum);
+      
+      // Load Tafseer from cache or API
+      if (_tafseerCache.containsKey(surahNum)) {
+        currentTafseer = Map.from(_tafseerCache[surahNum]!);
+      } else {
+        fetchTafseer(surahNum);
+      }
 
-      // ONLINE FETCH: Fetch exact Uthmani and IndoPak scripts directly from API to ensure accurate Talafuz 
-      _dio.get("https://api.alquran.cloud/v1/surah/$surahNum/editions/quran-uthmani,quran-indo-pak").then((res) {
-        if (res.statusCode == 200) {
-          List uAyahs = res.data['data'][0]['ayahs'];
-          List iAyahs = res.data['data'][1]['ayahs'];
-          for (var ayah in ayahs) {
-            var uMatch = uAyahs.firstWhere((a) => a['numberInSurah'] == ayah.numberInSurah, orElse: () => null);
-            var iMatch = iAyahs.firstWhere((a) => a['numberInSurah'] == ayah.numberInSurah, orElse: () => null);
-            if (uMatch != null) ayah.textUthmani = uMatch['text'];
-            if (iMatch != null) ayah.textIndoPak = iMatch['text'];
-          }
-          notifyListeners(); 
+      // ONLINE FETCH WITH FAST CACHE: Check cache to respond instantly 
+      if (_uthmaniCache.containsKey(surahNum) && _indoPakCache.containsKey(surahNum)) {
+        List uAyahs = _uthmaniCache[surahNum]!;
+        List iAyahs = _indoPakCache[surahNum]!;
+        for (var ayah in ayahs) {
+          var uMatch = uAyahs.firstWhere((a) => a['numberInSurah'] == ayah.numberInSurah, orElse: () => null);
+          var iMatch = iAyahs.firstWhere((a) => a['numberInSurah'] == ayah.numberInSurah, orElse: () => null);
+          if (uMatch != null) ayah.textUthmani = uMatch['text'];
+          if (iMatch != null) ayah.textIndoPak = iMatch['text'];
         }
-      }).catchError((_) {});
+      } else {
+        _dio.get("https://api.alquran.cloud/v1/surah/$surahNum/editions/quran-uthmani,quran-indo-pak").then((res) {
+          if (res.statusCode == 200) {
+            List uAyahs = res.data['data'][0]['ayahs'];
+            List iAyahs = res.data['data'][1]['ayahs'];
+            _uthmaniCache[surahNum] = uAyahs; // Apply cache
+            _indoPakCache[surahNum] = iAyahs; // Apply cache
+            for (var ayah in ayahs) {
+              var uMatch = uAyahs.firstWhere((a) => a['numberInSurah'] == ayah.numberInSurah, orElse: () => null);
+              var iMatch = iAyahs.firstWhere((a) => a['numberInSurah'] == ayah.numberInSurah, orElse: () => null);
+              if (uMatch != null) ayah.textUthmani = uMatch['text'];
+              if (iMatch != null) ayah.textIndoPak = iMatch['text'];
+            }
+            notifyListeners(); 
+          }
+        }).catchError((_) {});
+      }
 
     } catch (e) { ayahs =[]; }
 
@@ -344,7 +368,11 @@ class QuranAudioProvider extends ChangeNotifier {
 
   void _setupAudioListeners() {
     _globalAudioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ja.ProcessingState.completed) nextAyah();
+      if (state.processingState == ja.ProcessingState.completed) {
+         if (_isPlaying) { // Extra check to prevent phantom leaps when swapping reciters
+           nextAyah();
+         }
+      }
     });
   }
 
@@ -352,33 +380,60 @@ class QuranAudioProvider extends ChangeNotifier {
     if (ayahs.isEmpty) return;
     if (_playingAyahIndex == -1) _playingAyahIndex = 0;
     if (_isPlaying) {
-      await _globalAudioPlayer.pause();
       _isPlaying = false;
+      notifyListeners();
+      await _globalAudioPlayer.pause();
     } else {
       _isPlaying = true;
+      notifyListeners();
       _playCurrentAyah();
     }
-    notifyListeners();
   }
 
   void playSpecificAyah(int index) {
     _playingAyahIndex = index;
     _isPlaying = true;
-    _playCurrentAyah();
     notifyListeners();
+    _playCurrentAyah();
   }
 
   Future<void> _playCurrentAyah() async {
     if (_selectedReciter == null || ayahs.isEmpty || _playingAyahIndex < 0) return;
+    
     int globalId = ayahs[_playingAyahIndex].globalNumber;
+    
+    // Dynamic Fallback ID Calculator: Never allows ID to be 0 causing broken links
+    if (globalId == 0) {
+      int gId = 0;
+      for (int i = 0; i < currentSurahNumber - 1; i++) {
+        gId += allSurahsList[i].ayahCount;
+      }
+      globalId = gId + ayahs[_playingAyahIndex].numberInSurah;
+    }
+    
     String reciterId = _selectedReciter!.identifier;
 
     try {
-      await _globalAudioPlayer.setAudioSource(ja.AudioSource.uri(Uri.parse("https://cdn.islamic.network/quran/audio/128/$reciterId/$globalId.mp3")));
-      await _globalAudioPlayer.play();
+      await _globalAudioPlayer.stop(); // FIX: Explicitly clear memory & stop current audio so it doesnt overlap/hang
+      
+      final uri128 = Uri.parse("https://cdn.islamic.network/quran/audio/128/$reciterId/$globalId.mp3");
+      await _globalAudioPlayer.setAudioSource(ja.AudioSource.uri(uri128));
+      
+      if (_isPlaying) {
+        await _globalAudioPlayer.play();
+      }
     } catch (e) {
-      _isPlaying = false;
-      notifyListeners();
+      // API Fallback: Some specific qaris only have 64kbps, so we test it if 128 fails
+      try {
+        final uri64 = Uri.parse("https://cdn.islamic.network/quran/audio/64/$reciterId/$globalId.mp3");
+        await _globalAudioPlayer.setAudioSource(ja.AudioSource.uri(uri64));
+        if (_isPlaying) {
+          await _globalAudioPlayer.play();
+        }
+      } catch (fallbackError) {
+        _isPlaying = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -389,6 +444,7 @@ class QuranAudioProvider extends ChangeNotifier {
       notifyListeners();
     } else {
       _isPlaying = false;
+      _globalAudioPlayer.stop(); // Ensure player comes to a complete halt at end of Surah
       notifyListeners();
     }
   }
@@ -403,7 +459,9 @@ class QuranAudioProvider extends ChangeNotifier {
 
   void setReciter(Reciter reciter) {
     _selectedReciter = reciter;
-    if (_isPlaying) _playCurrentAyah();
+    if (_isPlaying) {
+      _playCurrentAyah(); // Fire method instantly allowing async stop/start handling behind the scenes
+    }
     notifyListeners();
   }
 
